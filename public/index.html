@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>線上點餐</title>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #333; padding-bottom: 160px; }
+    
+    /* Header */
+    .header { background: linear-gradient(135deg, #FF6B35, #E74C3C); color: #fff; padding: 20px 16px; text-align: center; position: sticky; top: 0; z-index: 100; }
+    .header h1 { font-size: 20px; }
+    .header p { font-size: 12px; opacity: 0.8; margin-top: 4px; }
+
+    /* Tabs */
+    .tabs { display: flex; background: #fff; border-bottom: 2px solid #eee; position: sticky; top: 62px; z-index: 99; overflow-x: auto; }
+    .tab { flex: 1; min-width: 80px; padding: 12px 8px; text-align: center; font-size: 14px; font-weight: 600; color: #999; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s; white-space: nowrap; }
+    .tab.active { color: #FF6B35; border-bottom-color: #FF6B35; }
+
+    /* Menu */
+    .menu-section { padding: 12px; }
+    .menu-card { background: #fff; border-radius: 12px; margin-bottom: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+    .menu-card-body { padding: 12px 16px; }
+    .menu-card-top { display: flex; justify-content: space-between; align-items: center; }
+    .menu-name { font-size: 16px; font-weight: 700; }
+    .menu-price { font-size: 18px; font-weight: 700; color: #FF6B35; }
+    .discount-badge { display: inline-block; background: #FFF0E0; color: #E74C3C; font-size: 11px; padding: 2px 8px; border-radius: 10px; margin-top: 4px; }
+    .qty-control { display: flex; align-items: center; gap: 0; margin-top: 10px; justify-content: flex-end; }
+    .qty-btn { width: 36px; height: 36px; border: none; border-radius: 50%; font-size: 20px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+    .qty-btn.minus { background: #f0f0f0; color: #999; }
+    .qty-btn.minus:active { background: #ddd; }
+    .qty-btn.plus { background: #FF6B35; color: #fff; }
+    .qty-btn.plus:active { background: #E55A25; }
+    .qty-num { width: 40px; text-align: center; font-size: 18px; font-weight: 700; }
+
+    /* Bottom bar */
+    .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); z-index: 200; }
+    .cart-summary { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; }
+    .cart-info { font-size: 14px; color: #666; }
+    .cart-info strong { color: #FF6B35; font-size: 18px; }
+    .cart-discount { font-size: 11px; color: #E74C3C; }
+    .checkout-btn { background: #FF6B35; color: #fff; border: none; padding: 12px 28px; border-radius: 25px; font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
+    .checkout-btn:active { background: #E55A25; transform: scale(0.97); }
+    .checkout-btn:disabled { background: #ccc; }
+
+    /* Modal overlay */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 300; justify-content: center; align-items: flex-end; }
+    .modal-overlay.show { display: flex; }
+    .modal { background: #fff; width: 100%; max-height: 85vh; border-radius: 20px 20px 0 0; overflow-y: auto; animation: slideUp 0.3s ease; }
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    .modal-header { padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; background: #fff; z-index: 1; }
+    .modal-header h2 { font-size: 18px; }
+    .modal-close { width: 32px; height: 32px; border: none; background: #f0f0f0; border-radius: 50%; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .modal-body { padding: 16px 20px; }
+    .modal-footer { padding: 16px 20px; border-top: 1px solid #eee; position: sticky; bottom: 0; background: #fff; }
+
+    /* Checkout steps */
+    .step-title { font-size: 14px; font-weight: 600; color: #999; margin-bottom: 12px; }
+    .option-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+    .option-item { padding: 14px 16px; border: 2px solid #eee; border-radius: 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: all 0.15s; }
+    .option-item:active { transform: scale(0.98); }
+    .option-item.selected { border-color: #FF6B35; background: #FFF8F5; }
+    .option-item .option-label { font-size: 15px; font-weight: 600; }
+    .option-item .option-extra { font-size: 13px; color: #999; }
+
+    /* Order summary in checkout */
+    .order-line { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; }
+    .order-line.discount { color: #E74C3C; }
+    .order-line.total { font-size: 18px; font-weight: 700; padding: 12px 0; border-top: 2px solid #eee; margin-top: 8px; }
+    .order-line.total .amount { color: #FF6B35; }
+    .order-line .strikethrough { text-decoration: line-through; color: #ccc; margin-right: 8px; }
+
+    .submit-btn { width: 100%; padding: 16px; background: #27ACB2; color: #fff; border: none; border-radius: 12px; font-size: 17px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
+    .submit-btn:active { background: #1E8A8F; transform: scale(0.98); }
+    .submit-btn:disabled { background: #ccc; }
+
+    /* Loading */
+    .loading { text-align: center; padding: 40px; color: #999; }
+    .spinner { display: inline-block; width: 30px; height: 30px; border: 3px solid #eee; border-top-color: #FF6B35; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Success screen */
+    .success-screen { display: none; text-align: center; padding: 60px 20px; }
+    .success-screen.show { display: block; }
+    .success-icon { font-size: 60px; margin-bottom: 16px; }
+    .success-screen h2 { font-size: 22px; margin-bottom: 8px; }
+    .success-screen p { color: #999; font-size: 14px; }
+    .success-screen .order-no { color: #27ACB2; font-weight: 700; font-size: 16px; margin: 12px 0; }
+    .close-btn { margin-top: 24px; padding: 14px 40px; background: #27ACB2; color: #fff; border: none; border-radius: 25px; font-size: 16px; font-weight: 600; cursor: pointer; }
+  </style>
+</head>
+<body>
+
+  <!-- Main ordering screen -->
+  <div id="mainScreen">
+    <div class="header">
+      <h1>☕ 線上點餐</h1>
+      <p>精選甜點多件折扣中！</p>
+    </div>
+
+    <div class="tabs" id="tabs"></div>
+    <div class="menu-section" id="menuList">
+      <div class="loading"><div class="spinner"></div><p style="margin-top:12px">載入菜單中...</p></div>
+    </div>
+
+    <div class="bottom-bar" id="bottomBar" style="display:none;">
+      <div class="cart-summary">
+        <div>
+          <div class="cart-info">🛒 <span id="cartCount">0</span> 件 ｜ <strong>$<span id="cartTotal">0</span></strong></div>
+          <div class="cart-discount" id="cartDiscount"></div>
+        </div>
+        <button class="checkout-btn" id="checkoutBtn" onclick="openCheckout()">結帳</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Checkout modal -->
+  <div class="modal-overlay" id="checkoutModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>📋 確認訂單</h2>
+        <button class="modal-close" onclick="closeCheckout()">✕</button>
+      </div>
+      <div class="modal-body">
+        <!-- 購物車明細 -->
+        <div class="step-title">🛒 商品明細</div>
+        <div id="checkoutItems"></div>
+
+        <!-- 物流選擇 -->
+        <div class="step-title" style="margin-top:20px">📦 物流方式</div>
+        <div class="option-list" id="shippingOptions"></div>
+
+        <!-- 付款選擇 -->
+        <div class="step-title">💳 付款方式</div>
+        <div class="option-list" id="paymentOptions"></div>
+
+        <!-- 金額摘要 -->
+        <div style="margin-top:16px; padding-top:16px; border-top: 1px solid #eee;">
+          <div id="orderSummary"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="submit-btn" id="submitBtn" onclick="submitOrder()">確認送出訂單</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Success screen -->
+  <div class="success-screen" id="successScreen">
+    <div class="success-icon">✅</div>
+    <h2>訂單已送出！</h2>
+    <div class="order-no" id="successOrderNo"></div>
+    <p>訂單明細已發送到您的 LINE 聊天室</p>
+    <button class="close-btn" onclick="closeLiff()">關閉</button>
+  </div>
+
+<script>
+  // ============================================================
+  // 全域狀態
+  // ============================================================
+  let menuData = null;
+  let cart = {};  // { menuId: qty }
+  let selectedShipping = 'pickup';
+  let selectedPayment = 'cod';
+  let userId = null;
+  let apiBase = '';
+
+  // ============================================================
+  // 初始化 LIFF
+  // ============================================================
+  async function initApp() {
+    try {
+      // 取得 API base URL（同 origin）
+      apiBase = window.location.origin;
+
+      // 初始化 LIFF
+      const liffId = getLiffId();
+      if (liffId && liffId !== 'YOUR_LIFF_ID') {
+        await liff.init({ liffId });
+        if (liff.isLoggedIn()) {
+          const profile = await liff.getProfile();
+          userId = profile.userId;
+        } else {
+          liff.login();
+          return;
+        }
+      } else {
+        // 開發模式：沒有 LIFF ID 時用測試 userId
+        console.warn('⚠️ 開發模式：未設定 LIFF ID');
+        userId = 'test-user-dev';
+      }
+
+      // 載入菜單
+      await loadMenu();
+    } catch (err) {
+      console.error('Init error:', err);
+      // fallback: 還是載入菜單
+      userId = userId || 'test-user';
+      await loadMenu();
+    }
+  }
+
+  function getLiffId() {
+    // 從 URL 嘗試解析 LIFF ID，或用預設值
+    const match = window.location.pathname.match(/^\/([0-9]+-[a-zA-Z0-9]+)/);
+    if (match) return match[1];
+    // 從 meta 或全域變數取得
+    return document.querySelector('meta[name="liff-id"]')?.content || null;
+  }
+
+  // ============================================================
+  // 載入菜單
+  // ============================================================
+  async function loadMenu() {
+    try {
+      const res = await fetch(`${apiBase}/api/menu`);
+      menuData = await res.json();
+      renderTabs();
+      renderMenu(menuData.categories[0]);
+      selectedShipping = menuData.shippingMethods[0].id;
+      selectedPayment = menuData.paymentMethods[0].id;
+    } catch (err) {
+      document.getElementById('menuList').innerHTML = '<div class="loading">載入失敗，請重試</div>';
+    }
+  }
+
+  // ============================================================
+  // 渲染 UI
+  // ============================================================
+  function renderTabs() {
+    const tabsEl = document.getElementById('tabs');
+    tabsEl.innerHTML = menuData.categories.map((cat, i) =>
+      `<div class="tab ${i === 0 ? 'active' : ''}" onclick="switchTab(this, '${cat}')">${cat}</div>`
+    ).join('');
+  }
+
+  function switchTab(el, category) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    renderMenu(category);
+  }
+
+  function renderMenu(category) {
+    const items = menuData.items.filter(i => i.category === category);
+    const menuList = document.getElementById('menuList');
+
+    menuList.innerHTML = items.map(item => `
+      <div class="menu-card">
+        <div class="menu-card-body">
+          <div class="menu-card-top">
+            <div>
+              <div class="menu-name">${item.name}</div>
+              ${item.has_discount ? '<div class="discount-badge">🏷️ 多件折扣</div>' : ''}
+            </div>
+            <div class="menu-price">$${item.price}</div>
+          </div>
+          ${item.has_discount ? '<div style="font-size:11px;color:#E74C3C;margin-top:4px;">1件8折｜2件75折｜3件7折｜4件↑68折</div>' : ''}
+          <div class="qty-control">
+            <button class="qty-btn minus" onclick="changeQty(${item.id}, -1)">−</button>
+            <div class="qty-num" id="qty-${item.id}">${cart[item.id] || 0}</div>
+            <button class="qty-btn plus" onclick="changeQty(${item.id}, 1)">+</button>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // ============================================================
+  // 購物車操作
+  // ============================================================
+  function changeQty(id, delta) {
+    const current = cart[id] || 0;
+    const newQty = Math.max(0, current + delta);
+    if (newQty === 0) {
+      delete cart[id];
+    } else {
+      cart[id] = newQty;
+    }
+    // 更新數字顯示
+    const el = document.getElementById(`qty-${id}`);
+    if (el) el.textContent = newQty;
+    updateBottomBar();
+  }
+
+  function updateBottomBar() {
+    const bar = document.getElementById('bottomBar');
+    const cartItems = getCartItems();
+    const totalQty = cartItems.reduce((s, i) => s + i.qty, 0);
+
+    if (totalQty === 0) {
+      bar.style.display = 'none';
+      return;
+    }
+    bar.style.display = 'block';
+
+    // 計算折扣
+    const discountItems = cartItems.filter(i => {
+      const m = menuData.items.find(mi => mi.id === i.id);
+      return m && m.has_discount;
+    });
+    const discountQty = discountItems.reduce((s, i) => s + i.qty, 0);
+
+    let subtotal = 0;
+    let discountAmount = 0;
+    for (const ci of cartItems) {
+      const m = menuData.items.find(mi => mi.id === ci.id);
+      if (!m) continue;
+      const orig = m.price * ci.qty;
+      subtotal += orig;
+      if (m.has_discount && discountQty >= 1) {
+        const tier = getDiscount(discountQty);
+        discountAmount += orig - Math.round(orig * tier.discount);
+      }
+    }
+
+    document.getElementById('cartCount').textContent = totalQty;
+    document.getElementById('cartTotal').textContent = subtotal - discountAmount;
+    const discEl = document.getElementById('cartDiscount');
+    if (discountAmount > 0) {
+      const tier = getDiscount(discountQty);
+      discEl.textContent = `🏷️ 折扣商品${discountQty}件享${tier.label}，省$${discountAmount}`;
+    } else {
+      discEl.textContent = '';
+    }
+  }
+
+  function getCartItems() {
+    return Object.entries(cart).map(([id, qty]) => ({ id: parseInt(id), qty }));
+  }
+
+  function getDiscount(qty) {
+    const tiers = [
+      { minQty: 4, discount: 0.68, label: '68折' },
+      { minQty: 3, discount: 0.70, label: '7折' },
+      { minQty: 2, discount: 0.75, label: '75折' },
+      { minQty: 1, discount: 0.80, label: '8折' },
+    ];
+    for (const t of tiers) {
+      if (qty >= t.minQty) return t;
+    }
+    return { discount: 1, label: '原價' };
+  }
+
+  // ============================================================
+  // 結帳 Modal
+  // ============================================================
+  function openCheckout() {
+    const cartItems = getCartItems();
+    if (!cartItems.length) return;
+
+    // 渲染商品明細
+    const itemsHtml = cartItems.map(ci => {
+      const m = menuData.items.find(mi => mi.id === ci.id);
+      if (!m) return '';
+      return `<div class="order-line"><span>${m.name} x${ci.qty}</span><span>$${m.price * ci.qty}</span></div>`;
+    }).join('');
+    document.getElementById('checkoutItems').innerHTML = itemsHtml;
+
+    // 渲染物流選項
+    document.getElementById('shippingOptions').innerHTML = menuData.shippingMethods.map(s =>
+      `<div class="option-item ${s.id === selectedShipping ? 'selected' : ''}" onclick="selectShipping('${s.id}')">
+        <span class="option-label">${s.label}</span>
+        <span class="option-extra">${s.fee > 0 ? '+$' + s.fee : '免運'}</span>
+      </div>`
+    ).join('');
+
+    // 渲染付款選項
+    document.getElementById('paymentOptions').innerHTML = menuData.paymentMethods.map(p =>
+      `<div class="option-item ${p.id === selectedPayment ? 'selected' : ''}" onclick="selectPayment('${p.id}')">
+        <span class="option-label">${p.label}</span>
+      </div>`
+    ).join('');
+
+    updateOrderSummary();
+    document.getElementById('checkoutModal').classList.add('show');
+  }
+
+  function closeCheckout() {
+    document.getElementById('checkoutModal').classList.remove('show');
+  }
+
+  function selectShipping(id) {
+    selectedShipping = id;
+    document.querySelectorAll('#shippingOptions .option-item').forEach(el => el.classList.remove('selected'));
+    event.currentTarget.classList.add('selected');
+    updateOrderSummary();
+  }
+
+  function selectPayment(id) {
+    selectedPayment = id;
+    document.querySelectorAll('#paymentOptions .option-item').forEach(el => el.classList.remove('selected'));
+    event.currentTarget.classList.add('selected');
+  }
+
+  function updateOrderSummary() {
+    const cartItems = getCartItems();
+    const discountItems = cartItems.filter(i => {
+      const m = menuData.items.find(mi => mi.id === i.id);
+      return m && m.has_discount;
+    });
+    const discountQty = discountItems.reduce((s, i) => s + i.qty, 0);
+
+    let subtotal = 0;
+    let discountAmount = 0;
+    for (const ci of cartItems) {
+      const m = menuData.items.find(mi => mi.id === ci.id);
+      if (!m) continue;
+      const orig = m.price * ci.qty;
+      subtotal += orig;
+      if (m.has_discount && discountQty >= 1) {
+        const tier = getDiscount(discountQty);
+        discountAmount += orig - Math.round(orig * tier.discount);
+      }
+    }
+
+    const shipping = menuData.shippingMethods.find(s => s.id === selectedShipping);
+    const shippingFee = shipping ? shipping.fee : 0;
+    const total = subtotal - discountAmount + shippingFee;
+
+    let html = `<div class="order-line"><span>商品小計</span><span>$${subtotal}</span></div>`;
+    if (discountAmount > 0) {
+      const tier = getDiscount(discountQty);
+      html += `<div class="order-line discount"><span>折扣（${tier.label}）</span><span>-$${discountAmount}</span></div>`;
+    }
+    html += `<div class="order-line"><span>運費</span><span>${shippingFee > 0 ? '$' + shippingFee : '免運'}</span></div>`;
+    html += `<div class="order-line total"><span>應付金額</span><span class="amount">$${total}</span></div>`;
+
+    document.getElementById('orderSummary').innerHTML = html;
+  }
+
+  // ============================================================
+  // 送出訂單
+  // ============================================================
+  async function submitOrder() {
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.textContent = '送出中...';
+
+    try {
+      const res = await fetch(`${apiBase}/api/order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          cart: getCartItems(),
+          paymentId: selectedPayment,
+          shippingId: selectedShipping,
+        }),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        // 顯示成功畫面
+        document.getElementById('mainScreen').style.display = 'none';
+        document.getElementById('checkoutModal').classList.remove('show');
+        document.getElementById('successOrderNo').textContent = `訂單編號：${data.orderNo}`;
+        document.getElementById('successScreen').classList.add('show');
+      } else {
+        alert('訂單送出失敗，請重試');
+        btn.disabled = false;
+        btn.textContent = '確認送出訂單';
+      }
+    } catch (err) {
+      console.error('Submit error:', err);
+      alert('網路錯誤，請重試');
+      btn.disabled = false;
+      btn.textContent = '確認送出訂單';
+    }
+  }
+
+  function closeLiff() {
+    if (typeof liff !== 'undefined' && liff.isInClient && liff.isInClient()) {
+      liff.closeWindow();
+    } else {
+      window.close();
+    }
+  }
+
+  // ============================================================
+  // 啟動
+  // ============================================================
+  initApp();
+</script>
+</body>
+</html>

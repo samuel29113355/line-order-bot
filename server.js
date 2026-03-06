@@ -185,7 +185,7 @@ function buildOrderReceiptFlex(order) {
       type: 'box', layout: 'horizontal', margin: 'md', contents: [
         { type: 'text', text: item.name, size: 'sm', color: '#555555', flex: 3 },
         { type: 'text', text: `x${item.qty}`, size: 'sm', color: '#999999', flex: 1, align: 'center' },
-        { type: 'text', text: `$${item.finalPrice}`, size: 'sm', color: item.hasItemDiscount ? '#E74C3C' : '#333', flex: 1, align: 'end', weight: 'bold' },
+        { type: 'text', text: `$${item.finalPrice}`, size: 'sm', color: item.hasItemDiscount ? '#E74C3C' : '#333333', flex: 1, align: 'end', weight: 'bold' },
       ],
     })),
     { type: 'separator', margin: 'xl' },
@@ -302,7 +302,10 @@ app.post('/api/order', async (req, res) => {
     await client.pushMessage(userId, buildOrderReceiptFlex(order));
     res.json({ success: true, orderNo, total: finalTotal });
   } catch (err) {
-    console.error('Push message error:', err);
+    console.error('Push message error:', err.message);
+    if (err.originalError?.response?.data) {
+      console.error('LINE API error detail:', JSON.stringify(err.originalError.response.data));
+    }
     res.json({ success: true, orderNo, total: finalTotal, pushError: '訂單已建立，但訊息發送失敗' });
   }
 });

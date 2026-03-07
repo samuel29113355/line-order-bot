@@ -242,7 +242,7 @@ function buildOrderReceiptFlex(order) {
 // API 路由（給 LIFF 前端用）
 // ============================================================
 
-// 取得菜單
+// 取得設定（LIFF ID）napp.get("/api/config", (req, res) => {n  res.json({ liffId: LIFF_ID });n});nn// 取得菜單
 app.get('/api/menu', (req, res) => {
   const items = db.prepare('SELECT * FROM menu WHERE is_available=1').all();
   const categories = [...new Set(items.map(i => i.category))];

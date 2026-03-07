@@ -176,7 +176,7 @@
       apiBase = window.location.origin;
 
       // 初始化 LIFF
-      const liffId = getLiffId();
+      let liffId = null;n      try { const cr = await fetch(apiBase+"/api/config"); const cd = await cr.json(); liffId = cd.liffId; } catch(e) {}
       if (liffId && liffId !== 'YOUR_LIFF_ID') {
         await liff.init({ liffId });
         if (liff.isLoggedIn()) {
